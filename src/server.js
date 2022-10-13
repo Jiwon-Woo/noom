@@ -1,6 +1,8 @@
 import http from "http";
-import WebSocket from "ws";
+// import WebSocket from "ws";
+import SocketIO from "socket.io";
 import express from "express";
+import { WebSocketServer } from "ws";
 
 const app = express();
 
@@ -8,20 +10,25 @@ app.set("view engine", "pug");
 app.set("views", __dirname + "/views");
 app.use("/public", express.static(__dirname + "/public"));
 app.get("/", (_, res) => res.render("home"));
-app.get("/*", (_, res) => res.redirect("/"));
+// app.get("/*", (_, res) => res.redirect("/"));
 
 const handleListen = () => console.log("Listening on http://localhost:3000");
 
-// 같은 서버(포트)에서 http, WebSocket 둘 다 작동시키기
-const server = http.createServer(app);
-// 인자를 아무것도 안줘도 WebSocket이 작동할 서버를 만들 수 있지만
-// http와 같은 서버를 공유할 것이기 때문에 인자로 server를 넘겨준다
-const wss = new WebSocket.Server({ server });
+const httpServer = http.createServer(app);
+const io = SocketIO(httpServer);
 
-function handleConnection(socket) {
-  console.log(socket);
-}
+io.on("connection", (socket) => {
+  // console.log(socket);
+  socket.on("enter_room", (msg, func) => {
+    console.log(msg);
+    setTimeout(() => {
+      // func은 프론트엔드에서 실행됨
+      func("hello from backend");
+    }, 10000);
+  });
+});
 
+/*
 const sockets = [];
 
 // socket: 브라우저랑 연결된 소켓
@@ -48,5 +55,6 @@ wss.on("connection", (socket) => {
     }
   });
 });
+*/
 
-server.listen(3000, handleListen);
+httpServer.listen(3000, handleListen);
