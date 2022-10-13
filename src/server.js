@@ -1,8 +1,7 @@
 import http from "http";
-// import WebSocket from "ws";
-import SocketIO from "socket.io";
+import { Server } from "socket.io";
+import { instrument } from "@socket.io/admin-ui";
 import express from "express";
-import { WebSocketServer } from "ws";
 
 const app = express();
 
@@ -15,17 +14,64 @@ app.get("/", (_, res) => res.render("home"));
 const handleListen = () => console.log("Listening on http://localhost:3000");
 
 const httpServer = http.createServer(app);
-const io = SocketIO(httpServer);
+const io = new Server(httpServer, {
+  cors: {
+    origin: ["https://admin.socket.io"],
+    credentials: true,
+  },
+});
+instrument(io, {
+  auth: false,
+});
+
+function publicRooms() {
+  const {
+    sockets: {
+      adapter: { sids, rooms },
+    },
+  } = io;
+  const publicRooms = [];
+  rooms.forEach((_, key) => {
+    if (sids.get(key) === undefined) {
+      publicRooms.push(key);
+    }
+  });
+  return publicRooms;
+}
+
+function countRoom(roomName) {
+  return io.sockets.adapter.rooms.get(roomName)?.size;
+}
 
 io.on("connection", (socket) => {
-  // console.log(socket);
-  socket.on("enter_room", (msg, func) => {
-    console.log(msg);
-    setTimeout(() => {
-      // func은 프론트엔드에서 실행됨
-      func("hello from backend");
-    }, 10000);
+  socket["nickname"] = "Anon";
+
+  socket.on("enter_room", (roomName, nickname, showRoom) => {
+    socket.join(roomName);
+    socket["nickname"] = nickname;
+    showRoom();
+    socket.to(roomName).emit("welcome", socket.nickname, countRoom(roomName));
+    io.sockets.emit("room_change", publicRooms());
   });
+
+  socket.on("disconnecting", () => {
+    socket.rooms.forEach((room) => {
+      socket.to(room).emit("bye", socket.nickname, countRoom(room) - 1);
+    });
+  });
+
+  socket.on("disconnect", () => {
+    io.sockets.emit("room_change", publicRooms());
+  });
+
+  socket.on("new_message", (msg, room, done) => {
+    socket.to(room).emit("new_message", `${socket.nickname}: ${msg}`);
+    done();
+  });
+
+  //   socket.on("nickname", (nickname) => {
+  // 	socket["nickname"] = nickname;
+  //   })
 });
 
 /*

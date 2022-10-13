@@ -2,23 +2,72 @@
 const socket = io();
 
 const welcome = document.getElementById("welcome");
+const room = document.getElementById("room");
 const form = welcome.querySelector("form");
 
-function handleRoomSubmit(event) {
+room.hidden = true;
+let roomName, nickname;
+
+function addMessage(message) {
+  const ul = room.querySelector("ul");
+  const li = document.createElement("li");
+  li.innerText = message;
+  ul.appendChild(li);
+}
+
+function handleMessageSubmit(event) {
   event.preventDefault();
-  const input = form.querySelector("input");
-
-  function backendDone(msg) {
-	console.log(`The backend says: `, msg);
-  }
-
-  // 원하는 이벤트 이름(room) 아무거나 설정 가능
-  // 그리고 인자(두번째)로 string뿐만 아니라 object를 보낼 수도 있다
-  // 마지막 인자는 콜백함수로 프론트에서 전송해주면 서버에서 호출가능, 실행은 프론트엔드에서
-  // 인자 개수에는 제한이 없음, 다 보낼 수 있음, 그러나 콜백함수는 무조건 마지막 함수여야함
-  socket.emit("enter_room", { payload: input.value }, backendDone);
-
+  const input = room.querySelector("#msg input");
+  const chat = input.value;
+  socket.emit("new_message", input.value, roomName, () => {
+    addMessage(`You: ${chat}`);
+  });
   input.value = "";
 }
 
+function showRoom() {
+  welcome.hidden = true;
+  room.hidden = false;
+  const h3 = room.querySelector("h3");
+  h3.innerText = `Room ${roomName}`;
+  const msgForm = room.querySelector("#msg");
+  msgForm.addEventListener("submit", handleMessageSubmit);
+}
+
+function handleRoomSubmit(event) {
+  event.preventDefault();
+  const roomNameInput = form.querySelector("#roomName");
+  const nicknameInput = form.querySelector("#nickname");
+
+  socket.emit("enter_room", roomNameInput.value, nicknameInput.value, showRoom);
+  //   socket.emit("nickname", nicknameInput.value);
+  roomName = roomNameInput.value;
+  nickname = nicknameInput.value;
+  //   input.value = "";
+}
+
 form.addEventListener("submit", handleRoomSubmit);
+
+socket.on("welcome", (user, newCount) => {
+  const h3 = room.querySelector("h3");
+  h3.innerText = `Room ${roomName} (${newCount})`;
+  addMessage(`${user} joined!`);
+});
+
+socket.on("bye", (user, newCount) => {
+  const h3 = room.querySelector("h3");
+  h3.innerText = `Room ${roomName} (${newCount})`;
+  addMessage(`${user} left!`);
+});
+
+socket.on("new_message", addMessage);
+
+socket.on("room_change", (rooms) => {
+  const roomList = welcome.querySelector("ul");
+  roomList.innerHTML = "";
+  rooms.forEach((room) => {
+    const li = document.createElement("li");
+    li.innerText = room;
+    roomList.append(li);
+  });
+});
